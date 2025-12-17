@@ -1,3 +1,10 @@
+/**
+ * WebRTC Video Signaling Server
+ * Handles peer-to-peer connection signaling for video/audio streaming
+ * 
+ * @module VideoServer
+ */
+
 import { Server, Socket } from 'socket.io';
 import express from 'express';
 import http from 'http';
@@ -25,6 +32,16 @@ app.use(cors({
   credentials: true
 }));
 
+/**
+ * Health check endpoint
+ * Returns server status and current statistics
+ * 
+ * @route GET /health
+ * @returns {Object} status - Server health information
+ * @returns {string} status.status - Server status (ok/error)
+ * @returns {number} status.rooms - Number of active rooms
+ * @returns {number} status.totalPeers - Total number of connected peers
+ */
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -33,51 +50,65 @@ app.get('/health', (req, res) => {
   });
 });
 
+/**
+ * Peer information interface
+ * @interface PeerInfo
+ * @property {string} socketId - Unique socket identifier
+ * @property {string} username - Display name of the peer
+ * @property {string} roomId - Room the peer is connected to
+ */
 interface PeerInfo {
   socketId: string;
   username: string;
   roomId: string;
 }
 
-// Estructura: roomId -> Set<socketId>
+/** Map of rooms to sets of socket IDs */
 const rooms = new Map<string, Set<string>>();
-// Estructura: socketId -> PeerInfo
+/** Map of socket IDs to peer information */
 const peers = new Map<string, PeerInfo>();
 
 const port = Number(process.env.PORT) || 3001;
 
+/**
+ * Socket.IO connection handler
+ * Manages WebRTC signaling for all connected clients
+ */
 io.on('connection', (socket: Socket) => {
   console.log(`✅ New connection: ${socket.id}`);
 
-  // Unirse a una sala
+  /**
+   * Join room event handler
+   * Adds a peer to a video room and notifies other peers
+   * 
+   * @event join-room
+   * @param {Object} data - Join room data
+   * @param {string} data.roomId - Room identifier
+   * @param {string} data.username - User's display name
+   */
   socket.on('join-room', ({ roomId, username }: { roomId: string; username: string }) => {
     console.log(`👤 ${username} (${socket.id}) joining room: ${roomId}`);
 
-    // Guardar información del peer
     peers.set(socket.id, {
       socketId: socket.id,
       username,
       roomId
     });
 
-    // Crear sala si no existe
     if (!rooms.has(roomId)) {
       rooms.set(roomId, new Set());
     }
 
     const room = rooms.get(roomId)!;
 
-    // Notificar a los usuarios existentes sobre el nuevo usuario
     room.forEach(existingPeerId => {
       const existingPeer = peers.get(existingPeerId);
       if (existingPeer) {
-        // Notificar al nuevo usuario sobre usuarios existentes
         socket.emit('user-connected', {
           userId: existingPeerId,
           username: existingPeer.username
         });
         
-        // Notificar a usuarios existentes sobre el nuevo usuario
         io.to(existingPeerId).emit('user-connected', {
           userId: socket.id,
           username: username
@@ -85,14 +116,21 @@ io.on('connection', (socket: Socket) => {
       }
     });
 
-    // Agregar usuario a la sala
     room.add(socket.id);
     socket.join(roomId);
 
     console.log(`📊 Room ${roomId} now has ${room.size} peer(s)`);
   });
 
-  // Manejar oferta WebRTC
+  /**
+   * WebRTC offer event handler
+   * Forwards connection offer to target peer
+   * 
+   * @event offer
+   * @param {Object} data - Offer data
+   * @param {RTCSessionDescriptionInit} data.offer - WebRTC offer
+   * @param {string} data.to - Target peer socket ID
+   */
   socket.on('offer', ({ offer, to }: { offer: RTCSessionDescriptionInit; to: string }) => {
     const fromPeer = peers.get(socket.id);
     if (fromPeer) {
@@ -105,7 +143,15 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // Manejar respuesta WebRTC
+  /**
+   * WebRTC answer event handler
+   * Forwards connection answer to target peer
+   * 
+   * @event answer
+   * @param {Object} data - Answer data
+   * @param {RTCSessionDescriptionInit} data.answer - WebRTC answer
+   * @param {string} data.to - Target peer socket ID
+   */
   socket.on('answer', ({ answer, to }: { answer: RTCSessionDescriptionInit; to: string }) => {
     const fromPeer = peers.get(socket.id);
     if (fromPeer) {
@@ -118,7 +164,15 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // Manejar candidatos ICE
+  /**
+   * ICE candidate event handler
+   * Forwards ICE candidate to target peer for NAT traversal
+   * 
+   * @event ice-candidate
+   * @param {Object} data - ICE candidate data
+   * @param {RTCIceCandidateInit} data.candidate - ICE candidate
+   * @param {string} data.to - Target peer socket ID
+   */
   socket.on('ice-candidate', ({ candidate, to }: { candidate: RTCIceCandidateInit; to: string }) => {
     io.to(to).emit('ice-candidate', {
       candidate,
@@ -126,7 +180,14 @@ io.on('connection', (socket: Socket) => {
     });
   });
 
-  // Compartir pantalla
+  /**
+   * Start screen share event handler
+   * Notifies room members that a peer started screen sharing
+   * 
+   * @event start-screen-share
+   * @param {Object} data - Screen share data
+   * @param {string} data.roomId - Room identifier
+   */
   socket.on('start-screen-share', ({ roomId }: { roomId: string }) => {
     const peer = peers.get(socket.id);
     if (peer) {
@@ -138,6 +199,14 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  /**
+   * Stop screen share event handler
+   * Notifies room members that a peer stopped screen sharing
+   * 
+   * @event stop-screen-share
+   * @param {Object} data - Screen share data
+   * @param {string} data.roomId - Room identifier
+   */
   socket.on('stop-screen-share', ({ roomId }: { roomId: string }) => {
     const peer = peers.get(socket.id);
     if (peer) {
@@ -148,17 +217,33 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // Salir de la sala
+  /**
+   * Leave room event handler
+   * Removes peer from room and notifies others
+   * 
+   * @event leave-room
+   */
   socket.on('leave-room', () => {
     handleDisconnect(socket.id);
   });
 
-  // Desconexión
+  /**
+   * Disconnect event handler
+   * Cleans up peer connections when socket disconnects
+   * 
+   * @event disconnect
+   */
   socket.on('disconnect', () => {
     console.log(`❌ Disconnection: ${socket.id}`);
     handleDisconnect(socket.id);
   });
 
+  /**
+   * Handles peer disconnection cleanup
+   * Removes peer from room and notifies remaining peers
+   * 
+   * @param {string} socketId - Socket ID of disconnecting peer
+   */
   function handleDisconnect(socketId: string) {
     const peer = peers.get(socketId);
     if (peer) {
@@ -168,14 +253,12 @@ io.on('connection', (socket: Socket) => {
       if (room) {
         room.delete(socketId);
         
-        // Notificar a otros usuarios en la sala
         socket.to(roomId).emit('user-disconnected', {
           userId: socketId
         });
 
         console.log(`👋 ${username} left room ${roomId}. ${room.size} peer(s) remaining`);
 
-        // Eliminar sala si está vacía
         if (room.size === 0) {
           rooms.delete(roomId);
           console.log(`🗑️  Room ${roomId} deleted (empty)`);
@@ -187,6 +270,9 @@ io.on('connection', (socket: Socket) => {
   }
 });
 
+/**
+ * Start the server
+ */
 server.listen(port, () => {
   console.log(`🚀 Video Server running on port ${port}`);
   console.log(`📡 CORS enabled for: ${origins.length > 0 ? origins.join(', ') : 'all origins'}`);

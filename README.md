@@ -1,185 +1,87 @@
-# Servidor de Video WebRTC
+# WebRTC Video Signaling Server
 
-Servidor de señalización WebRTC para transmisión de video y audio en tiempo real.
+WebRTC signaling server for real-time video and audio streaming.
 
-## 🚀 Características
+## Features
 
-- Señalización WebRTC (offer/answer/ICE candidates)
-- Soporte para múltiples salas
-- Gestión de múltiples peers
-- Soporte para compartir pantalla
-- Notificaciones de conexión/desconexión
-- CORS configurable
+- WebRTC signaling (offer/answer/ICE candidates)
+- Multi-room support
+- Multi-peer management
+- Screen sharing notifications
+- Connection/disconnection events
+- CORS configuration
 - Health check endpoint
 
-## 📋 Requisitos
+## Requirements
 
 - Node.js 18+
-- npm o yarn
+- npm or yarn
 
-## 🛠️ Instalación
+## Installation
 
 ```bash
 npm install
 ```
 
-## ⚙️ Configuración
+## Configuration
 
-Copia el archivo `.env.example` a `.env`:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Configura las variables:
+Configure variables:
 
 ```env
 PORT=3001
 ORIGIN=http://localhost:5173,http://localhost:3000
 ```
 
-## 🏃 Ejecutar
+## Development
 
-### Desarrollo
 ```bash
 npm run dev
 ```
 
-### Producción
+## Production
+
 ```bash
 npm run build
 npm start
 ```
 
-## 📡 API de Socket.IO
+## API Documentation
 
-### Eventos del Cliente → Servidor
+### Socket.IO Events
 
-#### `join-room`
-Unirse a una sala de video.
-```typescript
-socket.emit('join-room', { 
-  roomId: string, 
-  username: string 
-});
-```
+#### Client → Server
 
-#### `offer`
-Enviar oferta WebRTC a un peer.
-```typescript
-socket.emit('offer', { 
-  offer: RTCSessionDescriptionInit, 
-  to: string 
-});
-```
+- `join-room` - Join a video room
+- `offer` - Send WebRTC offer
+- `answer` - Send WebRTC answer
+- `ice-candidate` - Send ICE candidate
+- `start-screen-share` - Notify screen share start
+- `stop-screen-share` - Notify screen share stop
+- `leave-room` - Leave the room
 
-#### `answer`
-Enviar respuesta WebRTC a un peer.
-```typescript
-socket.emit('answer', { 
-  answer: RTCSessionDescriptionInit, 
-  to: string 
-});
-```
+#### Server → Client
 
-#### `ice-candidate`
-Enviar candidato ICE a un peer.
-```typescript
-socket.emit('ice-candidate', { 
-  candidate: RTCIceCandidateInit, 
-  to: string 
-});
-```
+- `user-connected` - New user joined
+- `offer` - WebRTC offer received
+- `answer` - WebRTC answer received
+- `ice-candidate` - ICE candidate received
+- `screen-share-started` - User started screen sharing
+- `screen-share-stopped` - User stopped screen sharing
+- `user-disconnected` - User disconnected
 
-#### `start-screen-share`
-Notificar inicio de compartir pantalla.
-```typescript
-socket.emit('start-screen-share', { 
-  roomId: string 
-});
-```
-
-#### `stop-screen-share`
-Notificar fin de compartir pantalla.
-```typescript
-socket.emit('stop-screen-share', { 
-  roomId: string 
-});
-```
-
-#### `leave-room`
-Salir de la sala.
-```typescript
-socket.emit('leave-room');
-```
-
-### Eventos del Servidor → Cliente
-
-#### `user-connected`
-Nuevo usuario conectado a la sala.
-```typescript
-socket.on('user-connected', ({ userId, username }) => {
-  // Crear conexión peer con este usuario
-});
-```
-
-#### `offer`
-Oferta WebRTC recibida.
-```typescript
-socket.on('offer', ({ offer, from, username }) => {
-  // Procesar oferta y crear respuesta
-});
-```
-
-#### `answer`
-Respuesta WebRTC recibida.
-```typescript
-socket.on('answer', ({ answer, from, username }) => {
-  // Procesar respuesta
-});
-```
-
-#### `ice-candidate`
-Candidato ICE recibido.
-```typescript
-socket.on('ice-candidate', ({ candidate, from }) => {
-  // Agregar candidato ICE
-});
-```
-
-#### `screen-share-started`
-Un usuario comenzó a compartir pantalla.
-```typescript
-socket.on('screen-share-started', ({ userId, username }) => {
-  // Actualizar UI
-});
-```
-
-#### `screen-share-stopped`
-Un usuario dejó de compartir pantalla.
-```typescript
-socket.on('screen-share-stopped', ({ userId }) => {
-  // Actualizar UI
-});
-```
-
-#### `user-disconnected`
-Usuario desconectado.
-```typescript
-socket.on('user-disconnected', ({ userId }) => {
-  // Cerrar conexión peer
-});
-```
-
-## 🏥 Health Check
-
-Endpoint para verificar el estado del servidor:
+### Health Check
 
 ```bash
-GET http://localhost:3001/health
+GET /health
 ```
 
-Respuesta:
+Response:
 ```json
 {
   "status": "ok",
@@ -188,27 +90,6 @@ Respuesta:
 }
 ```
 
-## 🔧 Arquitectura
-
-```
-Cliente A                Servidor                Cliente B
-   |                        |                        |
-   |---- join-room -------->|                        |
-   |                        |<----- join-room -------|
-   |<--- user-connected ----|                        |
-   |                        |---- user-connected --->|
-   |                        |                        |
-   |------ offer ---------->|                        |
-   |                        |------- offer --------->|
-   |                        |<------ answer ---------|
-   |<----- answer ----------|                        |
-   |                        |                        |
-   |--- ice-candidate ----->|                        |
-   |                        |---- ice-candidate ---->|
-   |                        |                        |
-   [Conexión P2P establecida]                        |
-```
-
-## 📝 Licencia
+## License
 
 MIT
